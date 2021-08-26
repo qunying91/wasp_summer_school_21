@@ -56,7 +56,7 @@ int32_t main(int32_t argc, char **argv) {
         const uint32_t HEIGHT{static_cast<uint32_t>(std::stoi(commandlineArguments["height"]))};
         const float STEER{std::stof(commandlineArguments["steer"])};
         const float THROTTLE{std::stof(commandlineArguments["throttle"])};
-	const float ACCGAIN{commandlineArguments.count("accgain") != 0 ? std::stof(commandlineArguments["accgain"]) : 0.02};
+	const float ACCGAIN{commandlineArguments.count("accgain") != 0 ? std::stof(commandlineArguments["accgain"]) : 0.6};
         const bool VERBOSE{commandlineArguments.count("verbose") != 0};
 
         const uint32_t MAX_CONTOUR_SIZE = (WIDTH/6)*(HEIGHT/2);
