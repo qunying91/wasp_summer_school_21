@@ -45,8 +45,9 @@ int32_t main(int32_t argc, char **argv) {
         std::cerr << "         --name:   name of the shared memory area to attach" << std::endl;
         std::cerr << "         --width:  width of the frame" << std::endl;
         std::cerr << "         --height: height of the frame" << std::endl;
-        std::cerr << "         --steer: angle to steer in degree when only cones on one side detected" << std::endl;
+        std::cerr << "         --steer: angle to steer in radians when only cones on one side detected" << std::endl;
         std::cerr << "         --throttle: throttle to accelerate the vehicle" << std::endl;
+
         std::cerr << "Example: " << argv[0] << " --cid=112 --name=img.argb --width=640 --height=480 --steer=10 --verbose" << std::endl;
     }
     else {
@@ -55,6 +56,7 @@ int32_t main(int32_t argc, char **argv) {
         const uint32_t HEIGHT{static_cast<uint32_t>(std::stoi(commandlineArguments["height"]))};
         const float STEER{std::stof(commandlineArguments["steer"])};
         const float THROTTLE{std::stof(commandlineArguments["throttle"])};
+	const float ACCGAIN{commandlineArguments.count("accgain") != 0 ? std::stof(commandlineArguments["accgain"]) : 0.02};
         const bool VERBOSE{commandlineArguments.count("verbose") != 0};
 
         const uint32_t MAX_CONTOUR_SIZE = (WIDTH/6)*(HEIGHT/2);
@@ -68,6 +70,16 @@ int32_t main(int32_t argc, char **argv) {
 
             // Interface to a running OpenDaVINCI session; here, you can send and receive messages.
             cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
+
+	    //std::mutex pedalMutex;
+	    //float pedal{0};
+	    //auto onPedal = [&pedalMutex, &pedal](cluon::data::Envelope &&env) {
+		//opendlv::proxy::PedalPositionRequest pr = cluon::extractMessage<opendlv::proxy::PedalPositionRequest>(std::move(env));
+
+		//std::lock_guard<std::mutex> lck(pedalMutex);
+		//pedal = pr.position();
+	    //};
+	    //od4.dataTrigger(opendlv::proxy::PedalPositionRequest::ID(), onPedal);
 
             // Endless loop; end the program by pressing Ctrl-C.
             while (od4.isRunning()) {
@@ -247,7 +259,7 @@ int32_t main(int32_t argc, char **argv) {
                 // Uncomment the following lines to accelerate/decelerate; range: +0.25 (forward) .. -1.0 (backwards).
                 // Be careful!
                 opendlv::proxy::PedalPositionRequest ppr;
-                ppr.position(THROTTLE);
+                ppr.position(THROTTLE + THROTTLE*ACCGAIN*cos(angle));
                 od4.send(ppr);
             }
         }
