@@ -26,6 +26,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <cmath>
 
 cv::RNG rng(12345);
 
@@ -35,23 +36,30 @@ int32_t main(int32_t argc, char **argv) {
     if ( (0 == commandlineArguments.count("cid")) ||
          (0 == commandlineArguments.count("name")) ||
          (0 == commandlineArguments.count("width")) ||
-         (0 == commandlineArguments.count("height")) ) {
+         (0 == commandlineArguments.count("height")) ||
+	 (0 == commandlineArguments.count("steer")) ||
+	 (0 == commandlineArguments.count("throttle"))) {
         std::cerr << argv[0] << " attaches to a shared memory area containing an ARGB image." << std::endl;
         std::cerr << "Usage:   " << argv[0] << " --cid=<OD4 session> --name=<name of shared memory area> [--verbose]" << std::endl;
         std::cerr << "         --cid:    CID of the OD4Session to send and receive messages" << std::endl;
         std::cerr << "         --name:   name of the shared memory area to attach" << std::endl;
         std::cerr << "         --width:  width of the frame" << std::endl;
         std::cerr << "         --height: height of the frame" << std::endl;
-        std::cerr << "Example: " << argv[0] << " --cid=112 --name=img.argb --width=640 --height=480 --verbose" << std::endl;
+	std::cerr << "         --steer: angle to steer in degree when only cones on one side detected" << std::endl;
+	std::cerr << "         --throttle: throttle to accelerate the vehicle" << std::endl;
+        std::cerr << "Example: " << argv[0] << " --cid=112 --name=img.argb --width=640 --height=480 --steer=10 --verbose" << std::endl;
     }
     else {
         const std::string NAME{commandlineArguments["name"]};
         const uint32_t WIDTH{static_cast<uint32_t>(std::stoi(commandlineArguments["width"]))};
         const uint32_t HEIGHT{static_cast<uint32_t>(std::stoi(commandlineArguments["height"]))};
+	const float STEER{std::stof(commandlineArguments["steer"])};
+	const float THROTTLE{std::stof(commandlineArguments["throttle"])};
         const bool VERBOSE{commandlineArguments.count("verbose") != 0};
 
 	const uint32_t MAX_CONTOUR_SIZE = (WIDTH/6)*(HEIGHT/2);
 	const uint32_t MIN_CONTOUR_SIZE = (WIDTH/60)*(HEIGHT/60);
+	const uint32_t DEFAULT_CONTOUR_SIZE = 1000;
 
         // Attach to the shared memory.
         std::unique_ptr<cluon::SharedMemory> sharedMemory{new cluon::SharedMemory{NAME}};
@@ -60,40 +68,6 @@ int32_t main(int32_t argc, char **argv) {
 
             // Interface to a running OpenDaVINCI session; here, you can send and receive messages.
             cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
-
-            // Handler to receive distance readings (realized as C++ lambda).
-            std::mutex distancesMutex;
-            float front{0};
-            float rear{0};
-            float left{0};
-            float right{0};
-            auto onDistance = [&distancesMutex, &front, &rear, &left, &right](cluon::data::Envelope &&env){
-                auto senderStamp = env.senderStamp();
-                // Now, we unpack the cluon::data::Envelope to get the desired DistanceReading.
-                opendlv::proxy::DistanceReading dr = cluon::extractMessage<opendlv::proxy::DistanceReading>(std::move(env));
-
-                // Store distance readings.
-                std::lock_guard<std::mutex> lck(distancesMutex);
-                switch (senderStamp) {
-                    case 0: front = dr.distance(); break;
-                    case 2: rear = dr.distance(); break;
-                    case 1: left = dr.distance(); break;
-                    case 3: right = dr.distance(); break;
-                }
-            };
-            // Finally, we register our lambda for the message identifier for opendlv::proxy::DistanceReading.
-            od4.dataTrigger(opendlv::proxy::DistanceReading::ID(), onDistance);
-
-	    std::mutex steerMutex;
-	    float steer{0};
-	    auto onSteer = [&steerMutex, &steer](cluon::data::Envelope &&env) {
-		opendlv::proxy::GroundSteeringRequest sr = cluon::extractMessage<opendlv::proxy::GroundSteeringRequest>(std::move(env));
-
-		std::lock_guard<std::mutex> lck(steerMutex);
-		steer = sr.groundSteering();
-	    };
-	    od4.dataTrigger(opendlv::proxy::GroundSteeringRequest::ID(), onSteer);
-
 
             // Endless loop; end the program by pressing Ctrl-C.
             while (od4.isRunning()) {
@@ -115,20 +89,13 @@ int32_t main(int32_t argc, char **argv) {
                 }
                 sharedMemory->unlock();
 
-                // TODO: Do something with the frame.
-
-                // Invert colors
-                //cv::bitwise_not(img, img);
-
-                // Draw a red rectangle
-                //cv::rectangle(img, cv::Point(50, 50), cv::Point(100, 100), cv::Scalar(0,0,255));
+		// -----------------------------FILTER BLUE CONES--------------------------------------//
 
 		// Crop the top half of the image to remove noises
 		cv::Mat cropped_img;
 		cv::Rect crop_region(0, HEIGHT/2, WIDTH, HEIGHT/2);
 		img = img(crop_region);
 
-		// -----------------------------FILTER BLUE CONES--------------------------------------//
 		// Filter the image by color to identify blue cones and yellow cones
 		cv::Mat hsv;
 		cv::cvtColor(img, hsv, cv::COLOR_BGR2HSV);
@@ -190,7 +157,7 @@ int32_t main(int32_t argc, char **argv) {
 
 		// -----------------------------DRAW CONTOURS-----------------------------------//
 
-		uint32_t max_area_blueCone = 100;
+		uint32_t max_area_blueCone = DEFAULT_CONTOUR_SIZE;
 
 		for( size_t i = 0; i< contoursBlue.size(); i++ )
 		{
@@ -202,7 +169,7 @@ int32_t main(int32_t argc, char **argv) {
 			continue;
 		    }
 
-		    if (max_area_blueCone==100) {
+		    if (max_area_blueCone==DEFAULT_CONTOUR_SIZE) {
 			max_area_blueCone = i;
 		    }else {
 			if(areasBlue[i] > areasBlue[max_area_blueCone]) {
@@ -215,7 +182,7 @@ int32_t main(int32_t argc, char **argv) {
 		    cv::circle(img, anchorsBlue[i], 10, blue, CV_FILLED, 8, 0);
 		}
 
-		uint32_t max_area_yellowCone = 100;
+		uint32_t max_area_yellowCone = DEFAULT_CONTOUR_SIZE;
 
 		for( size_t i = 0; i< contoursYellow.size(); i++ )
 		{
@@ -228,7 +195,7 @@ int32_t main(int32_t argc, char **argv) {
 			continue;
 		    }
 
-		    if (max_area_blueCone==100) {
+		    if (max_area_blueCone==DEFAULT_CONTOUR_SIZE) {
 			max_area_yellowCone = i;
 		    }else {
 			if(areasYellow[i] > areasYellow[max_area_yellowCone]) {
@@ -241,71 +208,48 @@ int32_t main(int32_t argc, char **argv) {
 		    cv::circle(img, anchorsYellow[i], 10, yellow, CV_FILLED, 8, 0);
 		}
 
-		cv::Point2f aimPoint;
-		if(max_area_blueCone != 100 && max_area_yellowCone !=100) {
+		float angle{0};
+		if(max_area_blueCone != DEFAULT_CONTOUR_SIZE && max_area_yellowCone !=DEFAULT_CONTOUR_SIZE) {
+		    cv::Point2f aimPoint;
 		    aimPoint.x = (anchorsBlue[max_area_blueCone].x + anchorsYellow[max_area_yellowCone].x)/2;
 		    aimPoint.y = (anchorsBlue[max_area_blueCone].y + anchorsYellow[max_area_yellowCone].y)/2;
-		} else if (max_area_blueCone != 100) {
-		    // TODO: turn left
-		    aimPoint.x = WIDTH/2 - 60;
-		    aimPoint.y = HEIGHT/2 - 100;
-		} else if (max_area_yellowCone != 100) {
-		    // TODO: turn right
-		    aimPoint.x = WIDTH/2 + 60;
-		    aimPoint.y = HEIGHT/2 - 100;
+		    angle = atan((WIDTH/2 - aimPoint.x)/(HEIGHT/2 - aimPoint.y));
+		    //cv::circle(img, aimPoint, 10, cv::Scalar( 0, 0, 255), CV_FILLED, 8, 0);
+		} else if (max_area_blueCone != DEFAULT_CONTOUR_SIZE) {
+		    angle = STEER;
+		} else if (max_area_yellowCone != DEFAULT_CONTOUR_SIZE) {
+		    angle = STEER;
 		}
 
-		cv::Scalar red = cv::Scalar( 0, 0, 255);
-		cv::circle(img, aimPoint, 10, red, CV_FILLED, 8, 0);
+		//cv::Scalar red = cv::Scalar( 0, 0, 255);
 
-		cv::line(img,cv::Point2f(WIDTH/2, HEIGHT/2),aimPoint,red,5);
-
-		cv::Scalar green = cv::Scalar( 0, 128, 0);
-		float angle = steer * 180 / 3.141592;
-		cv::Point2f baseline;
-		baseline.x = WIDTH/2 - 100*tan(angle);
-		baseline.y = HEIGHT/2 - 100;
-		cv::line(img,cv::Point2f(WIDTH/2, HEIGHT/2),baseline,green,5);
+		//cv::Point2f endPoint;
+		//endPoint.x = WIDTH/2 - 100*tan(angle);
+		//endPoint.y = HEIGHT/2 - 100;
+		//cv::line(img,cv::Point2f(WIDTH/2, HEIGHT/2),endPoint,red,5);
 
 		// -----------------------------DRAW END--------------------------------------//
 
                 // Display image.
-                if (VERBOSE) {
-                    cv::imshow(sharedMemory->name().c_str(), img);
-                    cv::waitKey(1);
-                }
-
-                ////////////////////////////////////////////////////////////////
-                // Do something with the distance readings if wanted.
-                {
-                    std::lock_guard<std::mutex> lck(distancesMutex);
-                    std::cout << "front = " << front << ", "
-                              << "rear = " << rear << ", "
-                              << "left = " << left << ", "
-                              << "right = " << right << "." << std::endl;
-                }
-
-                ////////////////////////////////////////////////////////////////
-                // Example for creating and sending a message to other microservices; can
-                // be removed when not needed.
-                opendlv::proxy::AngleReading ar;
-                ar.angle(123.45f);
-                od4.send(ar);
+                //if (VERBOSE) {
+                //    cv::imshow(sharedMemory->name().c_str(), img);
+                //    cv::waitKey(1);
+                //}
 
                 ////////////////////////////////////////////////////////////////
                 // Steering and acceleration/decelration.
                 //
                 // Uncomment the following lines to steer; range: +38deg (left) .. -38deg (right).
                 // Value groundSteeringRequest.groundSteering must be given in radians (DEG/180. * PI).
-                //opendlv::proxy::GroundSteeringRequest gsr;
-                //gsr.groundSteering(0);
-                //od4.send(gsr);
+                opendlv::proxy::GroundSteeringRequest gsr;
+                gsr.groundSteering(angle);
+                od4.send(gsr);
 
                 // Uncomment the following lines to accelerate/decelerate; range: +0.25 (forward) .. -1.0 (backwards).
                 // Be careful!
-                //opendlv::proxy::PedalPositionRequest ppr;
-                //ppr.position(0);
-                //od4.send(ppr);
+                opendlv::proxy::PedalPositionRequest ppr;
+		ppr.position(THROTTLE);
+                od4.send(ppr);
             }
         }
         retCode = 0;
