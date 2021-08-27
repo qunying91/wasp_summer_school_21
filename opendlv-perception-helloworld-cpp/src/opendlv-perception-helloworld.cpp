@@ -285,8 +285,8 @@ int32_t main(int32_t argc, char **argv) {
                     cv::Point2f controlPoint;
                     float control_length = 200 * (THROTTLE + THROTTLE*ACCGAIN*cos(angle));
                     controlPoint.x = WIDTH/2 - control_length * sin(angle);
-                    controlPoint.y = HEIGHT/2 - control_length * cos(angle);
-                    cv::line(img,cv::Point2f(WIDTH/2, HEIGHT/2), controlPoint,red,5);
+                    controlPoint.y = img.size().height - control_length * cos(angle);
+                    cv::line(img,cv::Point2f(WIDTH/2, img.size().height), controlPoint,red,5);
 
                     cv::Scalar green = cv::Scalar(0, 255, 0); // ground truth
                     // float pos_x = pedal * 200 * sin(steer);
