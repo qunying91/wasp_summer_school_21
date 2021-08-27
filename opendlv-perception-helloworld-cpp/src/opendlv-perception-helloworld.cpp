@@ -56,7 +56,7 @@ int32_t main(int32_t argc, char **argv) {
         const uint32_t HEIGHT{static_cast<uint32_t>(std::stoi(commandlineArguments["height"]))};
         const float STEER{std::stof(commandlineArguments["steer"])};
         const float THROTTLE{std::stof(commandlineArguments["throttle"])};
-	const float ACCGAIN{commandlineArguments.count("accgain") != 0 ? std::stof(commandlineArguments["accgain"]) : 0.6};
+        const float ACCGAIN{commandlineArguments.count("accgain") != 0 ? std::stof(commandlineArguments["accgain"]) : 0.6};
         const bool VERBOSE{commandlineArguments.count("verbose") != 0};
 
         const uint32_t MAX_CONTOUR_AREA = (WIDTH/6)*(HEIGHT/2);
@@ -71,15 +71,32 @@ int32_t main(int32_t argc, char **argv) {
             // Interface to a running OpenDaVINCI session; here, you can send and receive messages.
             cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
 
-	    //std::mutex pedalMutex;
-	    //float pedal{0};
-	    //auto onPedal = [&pedalMutex, &pedal](cluon::data::Envelope &&env) {
-		//opendlv::proxy::PedalPositionRequest pr = cluon::extractMessage<opendlv::proxy::PedalPositionRequest>(std::move(env));
+            float steer{0};
+            float pedal{0};
+            if (VERBOSE){
 
-		//std::lock_guard<std::mutex> lck(pedalMutex);
-		//pedal = pr.position();
-	    //};
-	    //od4.dataTrigger(opendlv::proxy::PedalPositionRequest::ID(), onPedal);
+                std::mutex steerMutex;
+                auto onSteer = [&steerMutex, &steer](cluon::data::Envelope &&env) {
+                    opendlv::proxy::GroundSteeringRequest sr =
+                        cluon::extractMessage<opendlv::proxy::GroundSteeringRequest>(std::move(env));
+                    std::lock_guard<std::mutex> lck(steerMutex);
+                    steer = sr.groundSteering();
+                    // std::cout << "angle: " << steer << " degree: " << steer / CV_PI * 180 << std::endl;
+                };
+
+                od4.dataTrigger(opendlv::proxy::GroundSteeringRequest::ID(), onSteer);
+
+
+                std::mutex pedalMutex;
+                auto onPedal = [&pedalMutex, &pedal](cluon::data::Envelope &&env) {
+                opendlv::proxy::PedalPositionRequest pr = cluon::extractMessage<opendlv::proxy::PedalPositionRequest>(std::move(env));
+
+                std::lock_guard<std::mutex> lck(pedalMutex);
+                pedal = pr.position();
+                };
+                od4.dataTrigger(opendlv::proxy::PedalPositionRequest::ID(), onPedal);
+
+            }
 
             // Endless loop; end the program by pressing Ctrl-C.
             while (od4.isRunning()) {
@@ -172,14 +189,14 @@ int32_t main(int32_t argc, char **argv) {
 
                 for( size_t i = 0; i< contoursBlue.size(); i++ )
                 {
-		    // Skip the blue cones on specific areas on the image, e.g.,leftmost
+                // Skip the blue cones on specific areas on the image, e.g.,leftmost
                     if ((unsigned)boundRectBlue[i].x < WIDTH/4
                             || ((unsigned)boundRectBlue[i].x < WIDTH/2
                             && (unsigned)boundRectBlue[i].y > HEIGHT/3)) {
                         continue;
                     }
 
-		    // Skip the cones that are too small or too large
+                // Skip the cones that are too small or too large
                     if (areasBlue[i] > MAX_CONTOUR_AREA || areasBlue[i] < MIN_CONTOUR_AREA) {
                         continue;
                     }
@@ -199,12 +216,12 @@ int32_t main(int32_t argc, char **argv) {
 
                 for( size_t i = 0; i< contoursYellow.size(); i++ )
                 {
-		    // Skip the yewllow cones on rightmost area on the image
+                // Skip the yewllow cones on rightmost area on the image
                     if ((unsigned)boundRectYellow[i].x > WIDTH*3/4) {
                         continue;
                     }
 
-		    // Skip the cones that are too small or too large
+                // Skip the cones that are too small or too large
                     if (areasYellow[i] > MAX_CONTOUR_AREA|| areasYellow[i] < MIN_CONTOUR_AREA) {
                         continue;
                     }
@@ -243,10 +260,25 @@ int32_t main(int32_t argc, char **argv) {
                 // -----------------------------DRAW END--------------------------------------//
 
                 // Display image.
-                //if (VERBOSE) {
-                //    cv::imshow(sharedMemory->name().c_str(), img);
-                //    cv::waitKey(1);
-                //}
+                if (VERBOSE) {
+                    cv::Scalar red = cv::Scalar( 0, 0, 255); // our result
+
+                    cv::Point2f controlPoint;
+                    float control_length = 200 * (THROTTLE + THROTTLE*ACCGAIN*cos(angle));
+                    controlPoint.x = WIDTH/2 - control_length * sin(angle);
+                    controlPoint.y = HEIGHT/2 - control_length * cos(angle);
+                    cv::line(img,cv::Point2f(WIDTH/2, HEIGHT/2), controlPoint,red,5);
+
+                    cv::Scalar green = cv::Scalar(0, 255, 0); // ground truth
+                    float pos_x = pedal * 200 * sin(steer);
+                    float pos_y = pedal * 200 * cos(steer);
+                    cv::Point pt1(static_cast<int32_t>(img.size().width * 0.5), img.size().height);
+                    cv::Point pt2(static_cast<int32_t>(img.size().width * 0.5) - pos_x, img.size().height - pos_y);
+                    cv::line(img, pt1, pt2, green, 3, 8);
+
+                    cv::imshow(sharedMemory->name().c_str(), img);
+                    cv::waitKey(1);
+                }
 
                 ////////////////////////////////////////////////////////////////
                 // Steering and acceleration/decelration.
