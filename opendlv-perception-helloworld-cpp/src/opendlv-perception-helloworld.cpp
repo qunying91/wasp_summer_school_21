@@ -60,7 +60,7 @@ int32_t main(int32_t argc, char **argv) {
         const bool VERBOSE{commandlineArguments.count("verbose") != 0};
 
         const uint32_t MAX_CONTOUR_AREA = (WIDTH/6)*(HEIGHT/2);
-        const uint32_t MIN_CONTOUR_AREA = (WIDTH/60)*(HEIGHT/60);
+        const uint32_t MIN_CONTOUR_AREA = (WIDTH/60)*(HEIGHT/30);
         const uint32_t DEFAULT_CONTOUR_SIZE = 1000;
 
         // Attach to the shared memory.
@@ -159,8 +159,8 @@ int32_t main(int32_t argc, char **argv) {
                 }
 
                 // -----------------------------FILTER YELLOW CONES------------------------------//
-                cv::Scalar hsvYLow(10, 100, 100);
-                cv::Scalar hsvYHi(80, 255, 255);
+                cv::Scalar hsvYLow(15, 150, 150);
+                cv::Scalar hsvYHi(40, 255, 255);
 
                 cv::Mat yellowCones;
                 cv::inRange(hsv, hsvYLow, hsvYHi, yellowCones);
