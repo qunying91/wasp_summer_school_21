@@ -48,7 +48,7 @@ int32_t main(int32_t argc, char **argv) {
         std::cerr << "         --steer: angle to steer in radians when only cones on one side detected" << std::endl;
         std::cerr << "         --throttle: throttle to accelerate the vehicle" << std::endl;
 
-        std::cerr << "Example: " << argv[0] << " --cid=112 --name=img.argb --width=640 --height=480 --steer=10 --verbose" << std::endl;
+        std::cerr << "Example: " << argv[0] << " --cid=112 --name=img.argb --width=640 --height=480 --steer=0.2 --throttle=0.1 --verbose" << std::endl;
     }
     else {
         const std::string NAME{commandlineArguments["name"]};
@@ -59,8 +59,8 @@ int32_t main(int32_t argc, char **argv) {
 	const float ACCGAIN{commandlineArguments.count("accgain") != 0 ? std::stof(commandlineArguments["accgain"]) : 0.6};
         const bool VERBOSE{commandlineArguments.count("verbose") != 0};
 
-        const uint32_t MAX_CONTOUR_SIZE = (WIDTH/6)*(HEIGHT/2);
-        const uint32_t MIN_CONTOUR_SIZE = (WIDTH/60)*(HEIGHT/60);
+        const uint32_t MAX_CONTOUR_AREA = (WIDTH/6)*(HEIGHT/2);
+        const uint32_t MIN_CONTOUR_AREA = (WIDTH/60)*(HEIGHT/60);
         const uint32_t DEFAULT_CONTOUR_SIZE = 1000;
 
         // Attach to the shared memory.
@@ -104,7 +104,6 @@ int32_t main(int32_t argc, char **argv) {
                 // -----------------------------FILTER BLUE CONES--------------------------------------//
 
                 // Crop the top half of the image to remove noises
-                cv::Mat cropped_img;
                 cv::Rect crop_region(0, HEIGHT/2, WIDTH, HEIGHT/2);
                 img = img(crop_region);
 
@@ -132,7 +131,6 @@ int32_t main(int32_t argc, char **argv) {
                 std::vector<cv::Point2f> anchorsBlue(contoursBlue.size());
                 std::vector<uint32_t> areasBlue(contoursBlue.size());
 
-                // Filter the contours by minimum and maximum size
                 for (size_t i = 0; i < contoursBlue.size(); i++) {
                     cv::approxPolyDP(contoursBlue[i], contours_poly_blue[i], 3, true);
                     boundRectBlue[i] = cv::boundingRect( contours_poly_blue[i] );
@@ -140,7 +138,7 @@ int32_t main(int32_t argc, char **argv) {
                     anchorsBlue[i] = cv::Point2f(boundRectBlue[i].x+boundRectBlue[i].width/2, boundRectBlue[i].y+boundRectBlue[i].height);
                 }
 
-                // -----------------------------FILTER YELLOW CONES--------------------------------------//
+                // -----------------------------FILTER YELLOW CONES------------------------------//
                 cv::Scalar hsvYLow(20, 100, 100);
                 cv::Scalar hsvYHi(40, 255, 255);
 
@@ -174,13 +172,15 @@ int32_t main(int32_t argc, char **argv) {
 
                 for( size_t i = 0; i< contoursBlue.size(); i++ )
                 {
+		    // Skip the blue cones on specific areas on the image, e.g.,leftmost
                     if ((unsigned)boundRectBlue[i].x < WIDTH/4
                             || ((unsigned)boundRectBlue[i].x < WIDTH/2
                             && (unsigned)boundRectBlue[i].y > HEIGHT/3)) {
                         continue;
                     }
 
-                    if (areasBlue[i] > MAX_CONTOUR_SIZE || areasBlue[i] < MIN_CONTOUR_SIZE) {
+		    // Skip the cones that are too small or too large
+                    if (areasBlue[i] > MAX_CONTOUR_AREA || areasBlue[i] < MIN_CONTOUR_AREA) {
                         continue;
                     }
 
@@ -199,12 +199,13 @@ int32_t main(int32_t argc, char **argv) {
 
                 for( size_t i = 0; i< contoursYellow.size(); i++ )
                 {
-
+		    // Skip the yewllow cones on rightmost area on the image
                     if ((unsigned)boundRectYellow[i].x > WIDTH*3/4) {
                         continue;
                     }
 
-                    if (areasYellow[i] > MAX_CONTOUR_SIZE|| areasYellow[i] < MIN_CONTOUR_SIZE) {
+		    // Skip the cones that are too small or too large
+                    if (areasYellow[i] > MAX_CONTOUR_AREA|| areasYellow[i] < MIN_CONTOUR_AREA) {
                         continue;
                     }
 
@@ -220,22 +221,22 @@ int32_t main(int32_t argc, char **argv) {
                 }
 
                 float angle{0};
-                if(max_area_blueCone != DEFAULT_CONTOUR_SIZE && max_area_yellowCone !=DEFAULT_CONTOUR_SIZE) {
+                if(max_area_blueCone != DEFAULT_CONTOUR_SIZE && max_area_yellowCone !=DEFAULT_CONTOUR_SIZE) { // Both blue cones and yellow cones detected
                     cv::Point2f aimPoint;
                     aimPoint.x = (anchorsBlue[max_area_blueCone].x + anchorsYellow[max_area_yellowCone].x)/2;
                     aimPoint.y = (anchorsBlue[max_area_blueCone].y + anchorsYellow[max_area_yellowCone].y)/2;
-                    angle = atan((WIDTH/2 - aimPoint.x)/(HEIGHT/2 - aimPoint.y));
+                    angle = (float)atan((WIDTH/2 - aimPoint.x)/(HEIGHT/2 - aimPoint.y));
                     //cv::circle(img, aimPoint, 10, cv::Scalar( 0, 0, 255), CV_FILLED, 8, 0);
-                } else if (max_area_blueCone != DEFAULT_CONTOUR_SIZE) {
+                } else if (max_area_blueCone != DEFAULT_CONTOUR_SIZE) { // Only blue cones detected
                     angle = STEER;
-                } else if (max_area_yellowCone != DEFAULT_CONTOUR_SIZE) {
-                    angle = STEER;
+                } else if (max_area_yellowCone != DEFAULT_CONTOUR_SIZE) { // Only yellow cones detected
+                    angle = -STEER;
                 }
 
                 //cv::Scalar red = cv::Scalar( 0, 0, 255);
 
                 //cv::Point2f endPoint;
-                //endPoint.x = WIDTH/2 - 100*tan(angle);
+                //endPoint.x = (float)(WIDTH/2 - 100*tan(angle));
                 //endPoint.y = HEIGHT/2 - 100;
                 //cv::line(img,cv::Point2f(WIDTH/2, HEIGHT/2),endPoint,red,5);
 
@@ -259,7 +260,7 @@ int32_t main(int32_t argc, char **argv) {
                 // Uncomment the following lines to accelerate/decelerate; range: +0.25 (forward) .. -1.0 (backwards).
                 // Be careful!
                 opendlv::proxy::PedalPositionRequest ppr;
-                ppr.position(THROTTLE + THROTTLE*ACCGAIN*cos(angle));
+                ppr.position((float)(THROTTLE + THROTTLE*ACCGAIN*cos(angle)));
                 od4.send(ppr);
             }
         }
