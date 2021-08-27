@@ -125,12 +125,15 @@ int32_t main(int32_t argc, char **argv) {
                 cv::Rect crop_region(0, HEIGHT/2, WIDTH, HEIGHT/2);
                 img = img(crop_region);
 
+                // Add Black rectangle on top of sensors
+                // std::cout << "img size " << img.size << std::endl;
+                cv::rectangle(img, cv :: Point (270 , 240) , cv :: Point (1000 , 370) , cv :: Scalar (0,0 ,0), -1);
                 // Filter the image by color to identify blue cones and yellow cones
                 cv::Mat hsv;
                 cv::cvtColor(img, hsv, cv::COLOR_BGR2HSV);
 
-                cv::Scalar hsvBLow(110, 50, 50);
-                cv::Scalar hsvBHi(130, 255, 255);
+                cv::Scalar hsvBLow(120, 50, 50);
+                cv::Scalar hsvBHi(130, 150, 150);
 
                 cv::Mat blueCones;
                 cv::inRange(hsv, hsvBLow, hsvBHi, blueCones);
@@ -257,15 +260,16 @@ int32_t main(int32_t argc, char **argv) {
                     angle = -STEER;
                 } else { // None of them are detected
                     angle = angleHistory; 
+                    // std::cout << "--------------------" << std::endl << "No cones detected" << std::endl << "--------------------" << std::endl;
                 }
 
                 // Angle threshold
                 angle = std::min((double)angle, CV_PI * 0.25);
                 angle = std::max((double)angle, -CV_PI * 0.25);
-
+                // std::cout << "angle " << angle << std::endl;
                 // update angleHistory
                 angleHistory = angle;
-
+                // std::cout << "angle History" << angleHistory << std::endl;
                 //cv::Scalar red = cv::Scalar( 0, 0, 255);
 
                 //cv::Point2f endPoint;
@@ -276,25 +280,25 @@ int32_t main(int32_t argc, char **argv) {
                 // -----------------------------DRAW END--------------------------------------//
 
                 // Display image.
-                // if (VERBOSE) {
-                //     cv::Scalar red = cv::Scalar( 0, 0, 255); // our result
+                if (VERBOSE) {
+                    cv::Scalar red = cv::Scalar( 0, 0, 255); // our result
 
-                //     cv::Point2f controlPoint;
-                //     float control_length = 200 * (THROTTLE + THROTTLE*ACCGAIN*cos(angle));
-                //     controlPoint.x = WIDTH/2 - control_length * sin(angle);
-                //     controlPoint.y = HEIGHT/2 - control_length * cos(angle);
-                //     cv::line(img,cv::Point2f(WIDTH/2, HEIGHT/2), controlPoint,red,5);
+                    cv::Point2f controlPoint;
+                    float control_length = 200 * (THROTTLE + THROTTLE*ACCGAIN*cos(angle));
+                    controlPoint.x = WIDTH/2 - control_length * sin(angle);
+                    controlPoint.y = HEIGHT/2 - control_length * cos(angle);
+                    cv::line(img,cv::Point2f(WIDTH/2, HEIGHT/2), controlPoint,red,5);
 
-                //     cv::Scalar green = cv::Scalar(0, 255, 0); // ground truth
-                //     float pos_x = pedal * 200 * sin(steer);
-                //     float pos_y = pedal * 200 * cos(steer);
-                //     cv::Point pt1(static_cast<int32_t>(img.size().width * 0.5), img.size().height);
-                //     cv::Point pt2(static_cast<int32_t>(img.size().width * 0.5) - pos_x, img.size().height - pos_y);
-                //     cv::line(img, pt1, pt2, green, 3, 8);
+                    cv::Scalar green = cv::Scalar(0, 255, 0); // ground truth
+                    // float pos_x = pedal * 200 * sin(steer);
+                    // float pos_y = pedal * 200 * cos(steer);
+                    // cv::Point pt1(static_cast<int32_t>(img.size().width * 0.5), img.size().height);
+                    // cv::Point pt2(static_cast<int32_t>(img.size().width * 0.5) - pos_x, img.size().height - pos_y);
+                    // cv::line(img, pt1, pt2, green, 3, 8);
 
-                //     cv::imshow(sharedMemory->name().c_str(), img);
-                //     cv::waitKey(1);
-                // }
+                    cv::imshow(sharedMemory->name().c_str(), img);
+                    cv::waitKey(1);
+                }
 
                 ////////////////////////////////////////////////////////////////
                 // Steering and acceleration/decelration.
