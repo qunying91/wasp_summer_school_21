@@ -122,12 +122,12 @@ int32_t main(int32_t argc, char **argv) {
                 // -----------------------------FILTER BLUE CONES--------------------------------------//
 
                 // Crop the top half of the image to remove noises
-                cv::Rect crop_region(0, HEIGHT/2, WIDTH, HEIGHT/2);
+                cv::Rect crop_region(0, HEIGHT*0.55, WIDTH, HEIGHT*0.45);
                 img = img(crop_region);
 
                 // Add Black rectangle on top of sensors
                 // std::cout << "img size " << img.size << std::endl;
-                cv::rectangle(img, cv :: Point (270 , 240) , cv :: Point (1000 , 370) , cv :: Scalar (0,0 ,0), -1);
+                cv::rectangle(img, cv :: Point (270 , 200) , cv :: Point (1000 , 370) , cv :: Scalar (0,0 ,0), -1);
                 // Filter the image by color to identify blue cones and yellow cones
                 cv::Mat hsv;
                 cv::cvtColor(img, hsv, cv::COLOR_BGR2HSV);
