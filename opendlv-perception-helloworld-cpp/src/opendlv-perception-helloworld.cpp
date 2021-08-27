@@ -72,32 +72,32 @@ int32_t main(int32_t argc, char **argv) {
             cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
 
             float angleHistory{0};
-            float steer{0};
-            float pedal{0};
-            if (VERBOSE){
+            // float steer{0};
+            // float pedal{0};
+            // if (VERBOSE){
 
-                std::mutex steerMutex;
-                auto onSteer = [&steerMutex, &steer](cluon::data::Envelope &&env) {
-                    opendlv::proxy::GroundSteeringRequest sr =
-                        cluon::extractMessage<opendlv::proxy::GroundSteeringRequest>(std::move(env));
-                    std::lock_guard<std::mutex> lck(steerMutex);
-                    steer = sr.groundSteering();
-                    // std::cout << "angle: " << steer << " degree: " << steer / CV_PI * 180 << std::endl;
-                };
+            //     std::mutex steerMutex;
+            //     auto onSteer = [&steerMutex, &steer](cluon::data::Envelope &&env) {
+            //         opendlv::proxy::GroundSteeringRequest sr =
+            //             cluon::extractMessage<opendlv::proxy::GroundSteeringRequest>(std::move(env));
+            //         std::lock_guard<std::mutex> lck(steerMutex);
+            //         steer = sr.groundSteering();
+            //         // std::cout << "angle: " << steer << " degree: " << steer / CV_PI * 180 << std::endl;
+            //     };
 
-                od4.dataTrigger(opendlv::proxy::GroundSteeringRequest::ID(), onSteer);
+            //     od4.dataTrigger(opendlv::proxy::GroundSteeringRequest::ID(), onSteer);
 
 
-                std::mutex pedalMutex;
-                auto onPedal = [&pedalMutex, &pedal](cluon::data::Envelope &&env) {
-                    opendlv::proxy::PedalPositionRequest pr = cluon::extractMessage<opendlv::proxy::PedalPositionRequest>(std::move(env));
+            //     std::mutex pedalMutex;
+            //     auto onPedal = [&pedalMutex, &pedal](cluon::data::Envelope &&env) {
+            //         opendlv::proxy::PedalPositionRequest pr = cluon::extractMessage<opendlv::proxy::PedalPositionRequest>(std::move(env));
 
-                    std::lock_guard<std::mutex> lck(pedalMutex);
-                    pedal = pr.position();
-                };
-                od4.dataTrigger(opendlv::proxy::PedalPositionRequest::ID(), onPedal);
+            //         std::lock_guard<std::mutex> lck(pedalMutex);
+            //         pedal = pr.position();
+            //     };
+            //     od4.dataTrigger(opendlv::proxy::PedalPositionRequest::ID(), onPedal);
 
-            }
+            // }
 
             // Endless loop; end the program by pressing Ctrl-C.
             while (od4.isRunning()) {
@@ -239,11 +239,17 @@ int32_t main(int32_t argc, char **argv) {
                 }
 
                 float angle{0};
+                float curr_ratio{0.9f};
                 if(max_area_blueCone != DEFAULT_CONTOUR_SIZE && max_area_yellowCone !=DEFAULT_CONTOUR_SIZE) { // Both blue cones and yellow cones detected
                     cv::Point2f aimPoint;
                     aimPoint.x = (anchorsBlue[max_area_blueCone].x + anchorsYellow[max_area_yellowCone].x)/2;
                     aimPoint.y = (anchorsBlue[max_area_blueCone].y + anchorsYellow[max_area_yellowCone].y)/2;
-                    angle = (float)atan((WIDTH/2 - aimPoint.x)/(HEIGHT/2 - aimPoint.y));
+                    float curr_angle = (float)atan((WIDTH/2 - aimPoint.x)/(HEIGHT/2 - aimPoint.y));
+
+                    // consider history angle;
+                    angle = curr_angle * curr_ratio + angleHistory * (1 - curr_ratio);
+                    // std::cout << "curr: " << curr_angle << " his: " << angleHistory << " final: " << angle << std::endl;
+
                     //cv::circle(img, aimPoint, 10, cv::Scalar( 0, 0, 255), CV_FILLED, 8, 0);
                 } else if (max_area_blueCone != DEFAULT_CONTOUR_SIZE) { // Only blue cones detected
                     angle = STEER;
@@ -270,25 +276,25 @@ int32_t main(int32_t argc, char **argv) {
                 // -----------------------------DRAW END--------------------------------------//
 
                 // Display image.
-                if (VERBOSE) {
-                    cv::Scalar red = cv::Scalar( 0, 0, 255); // our result
+                // if (VERBOSE) {
+                //     cv::Scalar red = cv::Scalar( 0, 0, 255); // our result
 
-                    cv::Point2f controlPoint;
-                    float control_length = 200 * (THROTTLE + THROTTLE*ACCGAIN*cos(angle));
-                    controlPoint.x = WIDTH/2 - control_length * sin(angle);
-                    controlPoint.y = HEIGHT/2 - control_length * cos(angle);
-                    cv::line(img,cv::Point2f(WIDTH/2, HEIGHT/2), controlPoint,red,5);
+                //     cv::Point2f controlPoint;
+                //     float control_length = 200 * (THROTTLE + THROTTLE*ACCGAIN*cos(angle));
+                //     controlPoint.x = WIDTH/2 - control_length * sin(angle);
+                //     controlPoint.y = HEIGHT/2 - control_length * cos(angle);
+                //     cv::line(img,cv::Point2f(WIDTH/2, HEIGHT/2), controlPoint,red,5);
 
-                    cv::Scalar green = cv::Scalar(0, 255, 0); // ground truth
-                    float pos_x = pedal * 200 * sin(steer);
-                    float pos_y = pedal * 200 * cos(steer);
-                    cv::Point pt1(static_cast<int32_t>(img.size().width * 0.5), img.size().height);
-                    cv::Point pt2(static_cast<int32_t>(img.size().width * 0.5) - pos_x, img.size().height - pos_y);
-                    cv::line(img, pt1, pt2, green, 3, 8);
+                //     cv::Scalar green = cv::Scalar(0, 255, 0); // ground truth
+                //     float pos_x = pedal * 200 * sin(steer);
+                //     float pos_y = pedal * 200 * cos(steer);
+                //     cv::Point pt1(static_cast<int32_t>(img.size().width * 0.5), img.size().height);
+                //     cv::Point pt2(static_cast<int32_t>(img.size().width * 0.5) - pos_x, img.size().height - pos_y);
+                //     cv::line(img, pt1, pt2, green, 3, 8);
 
-                    cv::imshow(sharedMemory->name().c_str(), img);
-                    cv::waitKey(1);
-                }
+                //     cv::imshow(sharedMemory->name().c_str(), img);
+                //     cv::waitKey(1);
+                // }
 
                 ////////////////////////////////////////////////////////////////
                 // Steering and acceleration/decelration.
