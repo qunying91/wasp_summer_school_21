@@ -131,9 +131,8 @@ int32_t main(int32_t argc, char **argv) {
                 // Filter the image by color to identify blue cones and yellow cones
                 cv::Mat hsv;
                 cv::cvtColor(img, hsv, cv::COLOR_BGR2HSV);
-
-                cv::Scalar hsvBLow(120, 50, 50);
-                cv::Scalar hsvBHi(130, 150, 150);
+                cv::Scalar hsvBLow(150, 50, 50);
+                cv::Scalar hsvBHi(255, 255, 255);
 
                 cv::Mat blueCones;
                 cv::inRange(hsv, hsvBLow, hsvBHi, blueCones);
