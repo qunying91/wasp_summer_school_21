@@ -71,6 +71,7 @@ int32_t main(int32_t argc, char **argv) {
             // Interface to a running OpenDaVINCI session; here, you can send and receive messages.
             cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
 
+            float angleHistory{0};
             float steer{0};
             float pedal{0};
             if (VERBOSE){
@@ -89,10 +90,10 @@ int32_t main(int32_t argc, char **argv) {
 
                 std::mutex pedalMutex;
                 auto onPedal = [&pedalMutex, &pedal](cluon::data::Envelope &&env) {
-                opendlv::proxy::PedalPositionRequest pr = cluon::extractMessage<opendlv::proxy::PedalPositionRequest>(std::move(env));
+                    opendlv::proxy::PedalPositionRequest pr = cluon::extractMessage<opendlv::proxy::PedalPositionRequest>(std::move(env));
 
-                std::lock_guard<std::mutex> lck(pedalMutex);
-                pedal = pr.position();
+                    std::lock_guard<std::mutex> lck(pedalMutex);
+                    pedal = pr.position();
                 };
                 od4.dataTrigger(opendlv::proxy::PedalPositionRequest::ID(), onPedal);
 
@@ -248,7 +249,16 @@ int32_t main(int32_t argc, char **argv) {
                     angle = STEER;
                 } else if (max_area_yellowCone != DEFAULT_CONTOUR_SIZE) { // Only yellow cones detected
                     angle = -STEER;
+                } else { // None of them are detected
+                    angle = angleHistory; 
                 }
+
+                // Angle threshold
+                angle = std::min((double)angle, CV_PI * 0.25);
+                angle = std::max((double)angle, -CV_PI * 0.25);
+
+                // update angleHistory
+                angleHistory = angle;
 
                 //cv::Scalar red = cv::Scalar( 0, 0, 255);
 
