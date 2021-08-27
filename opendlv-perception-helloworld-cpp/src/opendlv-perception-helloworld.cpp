@@ -246,7 +246,7 @@ int32_t main(int32_t argc, char **argv) {
                     cv::Point2f aimPoint;
                     aimPoint.x = (anchorsBlue[max_area_blueCone].x + anchorsYellow[max_area_yellowCone].x)/2;
                     aimPoint.y = (anchorsBlue[max_area_blueCone].y + anchorsYellow[max_area_yellowCone].y)/2;
-                    float curr_angle = (float)atan((WIDTH/2 - aimPoint.x)/(HEIGHT/2 - aimPoint.y));
+                    float curr_angle = (float)atan((img.size().width/2 - aimPoint.x)/(img.size().height - aimPoint.y));
 
                     // consider history angle;
                     angle = curr_angle * curr_ratio + angleHistory * (1 - curr_ratio);
