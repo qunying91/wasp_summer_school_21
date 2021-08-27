@@ -159,8 +159,8 @@ int32_t main(int32_t argc, char **argv) {
                 }
 
                 // -----------------------------FILTER YELLOW CONES------------------------------//
-                cv::Scalar hsvYLow(20, 100, 100);
-                cv::Scalar hsvYHi(40, 255, 255);
+                cv::Scalar hsvYLow(10, 100, 100);
+                cv::Scalar hsvYHi(80, 255, 255);
 
                 cv::Mat yellowCones;
                 cv::inRange(hsv, hsvYLow, hsvYHi, yellowCones);
