@@ -194,6 +194,7 @@ int32_t main(int32_t argc, char **argv) {
                 {
                 // Skip the blue cones on specific areas on the image, e.g.,leftmost
                     if ((unsigned)boundRectBlue[i].x < WIDTH/4
+                        || (unsigned)boundRectBlue[i].x > WIDTH*3/4 
                             || ((unsigned)boundRectBlue[i].x < WIDTH/2
                             && (unsigned)boundRectBlue[i].y > HEIGHT/3)) {
                         continue;
@@ -220,7 +221,7 @@ int32_t main(int32_t argc, char **argv) {
                 for( size_t i = 0; i< contoursYellow.size(); i++ )
                 {
                 // Skip the yewllow cones on rightmost area on the image
-                    if ((unsigned)boundRectYellow[i].x > WIDTH*3/4) {
+                    if ((unsigned)boundRectYellow[i].x > WIDTH*3/4 || (unsigned)boundRectYellow[i].x < WIDTH*1/4 ) {
                         continue;
                     }
 
@@ -242,8 +243,9 @@ int32_t main(int32_t argc, char **argv) {
 
                 float angle{0};
                 float curr_ratio{0.9f};
+                cv::Point2f aimPoint;
+                std::string scenario;
                 if(max_area_blueCone != DEFAULT_CONTOUR_SIZE && max_area_yellowCone !=DEFAULT_CONTOUR_SIZE) { // Both blue cones and yellow cones detected
-                    cv::Point2f aimPoint;
                     aimPoint.x = (anchorsBlue[max_area_blueCone].x + anchorsYellow[max_area_yellowCone].x)/2;
                     aimPoint.y = (anchorsBlue[max_area_blueCone].y + anchorsYellow[max_area_yellowCone].y)/2;
                     float curr_angle = (float)atan((img.size().width/2 - aimPoint.x)/(img.size().height - aimPoint.y));
@@ -253,18 +255,21 @@ int32_t main(int32_t argc, char **argv) {
                     // std::cout << "curr: " << curr_angle << " his: " << angleHistory << " final: " << angle << std::endl;
 
                     //cv::circle(img, aimPoint, 10, cv::Scalar( 0, 0, 255), CV_FILLED, 8, 0);
+                    scenario = "both cones";
                 } else if (max_area_blueCone != DEFAULT_CONTOUR_SIZE) { // Only blue cones detected
                     angle = STEER;
+                    scenario = "BLUE cones";
                 } else if (max_area_yellowCone != DEFAULT_CONTOUR_SIZE) { // Only yellow cones detected
                     angle = -STEER;
+                    scenario = "YELLOW cones";
                 } else { // None of them are detected
                     angle = angleHistory; 
+                    scenario = "NONE";
                     // std::cout << "--------------------" << std::endl << "No cones detected" << std::endl << "--------------------" << std::endl;
                 }
-
                 // Angle threshold
-                angle = std::min((double)angle, CV_PI * 0.25);
-                angle = std::max((double)angle, -CV_PI * 0.25);
+                angle = std::min((double)angle, CV_PI * 0.15);
+                angle = std::max((double)angle, -CV_PI * 0.15);
                 // std::cout << "angle " << angle << std::endl;
                 // update angleHistory
                 angleHistory = angle;
@@ -298,8 +303,15 @@ int32_t main(int32_t argc, char **argv) {
                     cv::imshow(sharedMemory->name().c_str(), img);
                     cv::waitKey(1);
                 }
+                // std::cout << "----------------------- \n" << std::endl;
+                // std::cout << "Scenario " << scenario << std::endl;
+                // std::cout <<"angle " << angle * 180/CV_PI << std::endl;
+                // std::cout << "Aim Points " << aimPoint.x  << " " << aimPoint.y << std::endl;
+                // std::cout <<"Anchors Blue " << anchorsBlue[max_area_blueCone].x << " " << anchorsBlue[max_area_blueCone].y<< std::endl;
+                // std::cout <<"Anchors Yellow " << anchorsYellow[max_area_yellowCone].x << " " << anchorsYellow[max_area_yellowCone].y<< std::endl;
+                // std::cout << "----------------------- \n" << std::endl;
 
-                ////////////////////////////////////////////////////////////////
+                ///////////////////////////////////////////////////////////////
                 // Steering and acceleration/decelration.
                 //
                 // Uncomment the following lines to steer; range: +38deg (left) .. -38deg (right).
